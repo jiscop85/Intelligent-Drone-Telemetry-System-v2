@@ -444,7 +444,90 @@ ROLE_PERMISSIONS = {
 def check_permission(user_role: Role, required_perm: Permission) -> bool:
     return required_perm in ROLE_PERMISSIONS[user_role]
 ```
+## Implementation Priority Matrix
 
+| Phase | Effort | Impact | Timeline | Priority |
+|-------|--------|--------|----------|----------|
+| 1. Persistence | Medium | High | Mo 1-2 | 🔴 **1st** |
+| 2. Replay | Medium | High | Mo 2-3 | 🔴 **1st** |
+| 3. Alerts | Medium | High | Mo 3-4 | 🟠 **2nd** |
+| 4. Waypoints | Low | Medium | Mo 4-5 | 🟠 **2nd** |
+| 5. Fusion | High | High | Mo 5-7 | 🟠 **2nd** |
+| 6. WebSocket | Medium | Medium | Mo 7-8 | 🟡 **3rd** |
+| 7. RBAC | Medium | Low | Mo 8-9 | 🟡 **3rd** |
+
+## Success Metrics
+
+After Phase 1-3:
+- ✅ Zero data loss (SQLite backup)
+- ✅ <2s replay latency
+- ✅ 99% alert accuracy
+- ✅ Zero missed critical alerts
+- ✅ <500ms anomaly detection latency
+
+After Phase 4-7:
+- ✅ Multi-user deployment
+- ✅ Browser-based remote monitoring
+- ✅ Mobile app push notifications
+- ✅ Mission autonomy validation
+- ✅ Enterprise-grade security
+
+## Architecture Diagrams
+
+### Phase 1-3 System
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Drone System                           │
+└──────────┬───────────────────────────────────────────────┘
+           │
+           ↓
+    ┌────────────────┐
+    │ C++ Collector  │
+    └────────┬───────┘
+             │ JSON
+             ↓
+    ┌──────────────┐      ┌─────────────┐
+    │ MQTT Broker  │──────│  SQLite DB  │
+    └────┬─────────┘      └─────────────┘
+         │
+    ┌────┴──────┬──────────┬──────────┐
+    ↓           ↓          ↓          ↓
+ Dashboard  ROS2Bridge Video Overlay AlertEngine
+    │           │          │          │
+    │           ↓          ↓          ↓
+    └──→ Analysis Engine ←─┴──────────┘
+         (Anomaly + Alerts)
+```
+
+## Getting Started with Phase 1
+
+```bash
+# Install database dependencies
+pip install sqlalchemy influxdb-client
+
+# Create databases directory
+mkdir -p data/db
+
+# Run setup script
+python3 scripts/setup_database.py
+
+# Dashboard will auto-save all samples
+python3 dashboard/app.py
+```
+
+## Contributing to Roadmap
+
+1. Open issue for feature discussion
+2. Create PR with implementation
+3. Test with real flight data
+4. Document in FEATURES.md
+5. Update this roadmap
+
+---
+
+**Last Updated**: 2026-05-29
+**Version**: MVP v2.0 → Phase 1 (In Progress)
 
 
 
