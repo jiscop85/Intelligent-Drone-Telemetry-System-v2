@@ -354,6 +354,97 @@ async def broadcast(message: dict):
 </body>
 </html>
 ```
+### 6.3 Mobile App Notifications
+
+```python
+# analytics/push_notifications.py (NEW)
+from firebase_admin import messaging
+
+def send_alert_notification(alert: Alert, device_token: str):
+    message = messaging.Message(
+        notification=messaging.Notification(
+            title=f"⚠️ {alert.level.name}",
+            body=alert.message,
+        ),
+        data={
+            "alert_type": alert.level.name,
+            "timestamp": str(alert.timestamp),
+        },
+        token=device_token,
+    )
+    
+    messaging.send(message)
+```
+
+## Phase 7: Role-Based Access Control (Months 8-9)
+
+### 7.1 Authentication
+
+```python
+# dashboard/auth.py (NEW)
+from PyQt6.QtWidgets import QDialog, QLineEdit, QPushButton, QVBoxLayout
+import hashlib
+import hmac
+
+class LoginDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.username_input = QLineEdit()
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        
+        login_btn = QPushButton("Login")
+        login_btn.clicked.connect(self.verify_credentials)
+        
+        layout = QVBoxLayout()
+        layout.addWidget(self.username_input)
+        layout.addWidget(self.password_input)
+        layout.addWidget(login_btn)
+        self.setLayout(layout)
+    
+    def verify_credentials(self):
+        # Verify against LDAP, OAuth, or local password hash
+        pass
+```
+
+### 7.2 Permission Model
+
+```python
+# analytics/permissions.py (NEW)
+from enum import Enum
+
+class Role(Enum):
+    VIEWER = 1      # Read-only telemetry
+    OPERATOR = 2    # Control + export
+    ENGINEER = 3    # Full access + training models
+    ADMIN = 4       # User management
+
+class Permission(Enum):
+    VIEW_TELEMETRY = "view:telemetry"
+    EXPORT_DATA = "export:data"
+    TRAIN_MODELS = "train:models"
+    MANAGE_ALERTS = "manage:alerts"
+    MANAGE_USERS = "manage:users"
+
+ROLE_PERMISSIONS = {
+    Role.VIEWER: [Permission.VIEW_TELEMETRY],
+    Role.OPERATOR: [
+        Permission.VIEW_TELEMETRY,
+        Permission.EXPORT_DATA,
+    ],
+    Role.ENGINEER: [
+        Permission.VIEW_TELEMETRY,
+        Permission.EXPORT_DATA,
+        Permission.TRAIN_MODELS,
+        Permission.MANAGE_ALERTS,
+    ],
+    Role.ADMIN: [p for p in Permission],
+}
+
+def check_permission(user_role: Role, required_perm: Permission) -> bool:
+    return required_perm in ROLE_PERMISSIONS[user_role]
+```
+
 
 
 
