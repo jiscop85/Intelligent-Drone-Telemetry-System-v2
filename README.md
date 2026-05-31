@@ -196,3 +196,121 @@ colcon build --packages-select drone_telemetry_bridge
 ```
 
 ## Running the Full System
+
+### Automated Startup Script (Linux/macOS)
+
+```bash
+#!/bin/bash
+# Start everything at once
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${YELLOW}Starting Drone Telemetry System...${NC}"
+
+# Start MQTT
+echo -e "${GREEN}[1/5] Starting MQTT Broker...${NC}"
+mosquitto -d -c /etc/mosquitto/mosquitto.conf
+
+sleep 2
+
+# Start C++ Collector
+echo -e "${GREEN}[2/5] Starting C++ Collector...${NC}"
+cd drone_telemetry_system/cpp_collector
+./telemetry_collector &
+COLLECTOR_PID=$!
+
+sleep 2
+
+# Start Dashboard
+echo -e "${GREEN}[3/5] Starting Python Dashboard...${NC}"
+cd ../../
+python3 dashboard/app.py &
+DASHBOARD_PID=$!
+
+# Start ROS2 Bridge (if ROS2 available)
+if command -v ros2 &> /dev/null; then
+    echo -e "${GREEN}[4/5] Starting ROS2 Bridge...${NC}"
+    source /opt/ros/humble/setup.bash
+    python3 ros2_bridge/bridge_node.py &
+    ROS_PID=$!
+else
+    echo -e "${YELLOW}[4/5] ROS2 not found, skipping bridge${NC}"
+fi
+
+echo -e "${GREEN}[5/5] System running!${NC}"
+echo "Dashboard PID: $DASHBOARD_PID"
+echo "Collector PID: $COLLECTOR_PID"
+echo ""
+echo "To stop: kill $COLLECTOR_PID $DASHBOARD_PID"
+```
+
+## Testing & Verification
+
+### Test MQTT Connectivity
+
+```bash
+# Subscribe to telemetry
+mosquitto_sub -h localhost -t "drone/telemetry" -v
+
+# Should see JSON messages like:
+# drone/telemetry {
+#   "ts_ms": 1710000000000,
+#   "gps": {"lat": 52.52, "lon": 13.405},
+#   "altitude_m": {"relative": 48.2, "absolute": 112.4},
+#   ...
+# }
+```
+
+### Test C++ Collector
+
+```bash
+# Build and run with verbose output
+cd cpp_collector/build
+./telemetry_collector 2>&1 | head -20
+# Look for: "Connected to MQTT broker"
+# Look for: "Waiting for drone..."
+```
+
+### Test Python Dashboard
+
+```bash
+# Run with debug output
+python3 -u dashboard/app.py 2>&1 | head -30
+# Should show: "MQTT connected: 0"
+```
+
+### Test ROS2 Bridge
+
+```bash
+ros2 topic list
+ros2 topic echo /drone/telemetry/raw
+ros2 topic echo /drone/gps
+```
+
+## Configuration
+
+### MQTT Configuration
+
+Edit `/etc/mosquitto/mosquitto.conf`:
+
+```mosquitto
+# Listen on all interfaces
+listener 1883
+protocol mqtt
+
+# WebSocket support (optional, for browser dashboards)
+listener 9001
+protocol websockets
+
+# Persistence
+persistence true
+persistence_location /var/lib/mosquitto/
+
+# Log output
+log_dest stdout
+log_dest topic
+log_type all
+```
