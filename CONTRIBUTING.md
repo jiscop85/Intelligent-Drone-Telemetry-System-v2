@@ -92,3 +92,85 @@ mypy drone_telemetry_system/
 ### C++
 
 Follow **Google C++ Style Guide** (C++17):
+
+```cpp
+// Good
+class TelemetryCollector {
+ public:
+  TelemetryCollector(const std::string& mqtt_uri);
+  ~TelemetryCollector() = default;
+  
+  bool connect_mqtt();
+  void publish_snapshot();
+  
+ private:
+  std::string mqtt_uri_;
+  std::mutex state_mutex_;
+};
+
+// Bad
+class TelemetryCollector {
+public:
+    TelemetryCollector(std::string mqtt_uri) { }  // No const&
+    bool ConnectMqtt() { }  // Wrong naming
+};
+```
+
+**Tools**:
+```bash
+# Format C++
+clang-format -i drone_telemetry_system/cpp_collector/*.cpp
+
+# Lint
+cppcheck drone_telemetry_system/cpp_collector/
+```
+
+## Commit Message Format
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types**:
+- `feat`: New feature
+- `fix`: Bug fix
+- `refactor`: Code restructuring
+- `docs`: Documentation updates
+- `test`: Test additions
+- `chore`: Maintenance, dependency updates
+- `perf`: Performance improvements
+
+**Example**:
+```
+feat(dashboard): add export to Parquet format
+
+- Implement to_parquet() in TelemetryStore
+- Add export button in PyQt6 UI
+- Handle empty data gracefully
+
+Closes #123
+```
+
+## Pull Request Process
+
+### 1. Prepare Your Branch
+
+```bash
+# Keep up with main
+git fetch upstream
+git rebase upstream/main
+
+# Push to your fork
+git push origin feature/your-feature-name
+```
+
+### 2. Create PR on GitHub
+
+**PR Title**:
+```
+[TYPE] Short description (e.g., "FEAT: Add CSV export to dashboard")
+```
