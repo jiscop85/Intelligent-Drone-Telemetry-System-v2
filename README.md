@@ -499,3 +499,106 @@ mosquitto_sub -h localhost -t "drone/telemetry"
 ```bash
 pip install PyQt6 PyQt6-WebEngine pyqtgraph
 ```
+
+## Extension Guide
+
+### Adding a New Telemetry Field
+
+1. **C++ Collector** (`telemetry_state.hpp`):
+   ```cpp
+   double new_field = NAN;  // Add field
+   ```
+
+2. **JSON Serialization** (`telemetry_state.hpp`):
+   ```cpp
+   {"new_field", new_field},  // Add to to_json()
+   ```
+
+3. **Subscribe to MAVSDK** (`main.cpp`):
+   ```cpp
+   telemetry_->subscribe_new_topic([this](const auto& data) {
+       std::lock_guard<std::mutex> lock(state_mutex_);
+       state_.new_field = data.value;
+   });
+   ```
+
+4. **Update Dashboard** (`app.py`):
+   ```python
+   self.cards["New Field"] = val
+   ```
+
+5. **Dashboard display** (`refresh_ui()`):
+   ```python
+   self.cards["New Field"].setText(f"{s.new_field:.2f}")
+   ```
+
+### Adding a New Export Format
+
+```python
+# dashboard/telemetry_store.py
+def to_parquet(self, path: str):
+    """Export to Apache Parquet format"""
+    import pyarrow.parquet as pq
+    df = pd.DataFrame([asdict(s) for s in self.samples])
+    pq.write_table(pa.Table.from_pandas(df), path)
+```
+
+## Future Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the next phase improvements:
+- SQLite/InfluxDB storage
+- Flight replay with timeline scrubbing
+- Real-time alerting system
+- Mission waypoint visualization
+- Camera + telemetry fusion
+- WebSocket browser dashboards
+- Role-based access control
+
+## Performance Tuning
+
+### Increase Update Rate
+
+C++ Collector:
+```cpp
+// main.cpp
+telemetry_->set_rate_position(20.0);    // 20 Hz instead of 10
+telemetry_->set_rate_imu(50.0);        // 50 Hz instead of 20
+```
+
+Dashboard:
+```python
+# app.py
+self.timer.start(50)  # 50ms instead of 250ms
+```
+
+### Reduce Memory Footprint
+
+```python
+# telemetry_store.py
+self.store = TelemetryStore(maxlen=1000)  # 1000 samples instead of 5000
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes with descriptive commits
+4. Test with real flight data
+5. Submit pull request
+
+## License
+
+Apache 2.0 - See LICENSE file
+
+## Support
+
+- **Issues**: GitHub Issues
+- **Discussions**: GitHub Discussions
+- **Email**: support@drones.local
+
+## Acknowledgments
+
+- MAVSDK team for excellent autopilot abstraction
+- Eclipse Mosquitto for reliable MQTT
+- ROS2 community for robotics standards
+- PyQt6 for professional desktop UI
