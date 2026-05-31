@@ -174,3 +174,178 @@ git push origin feature/your-feature-name
 ```
 [TYPE] Short description (e.g., "FEAT: Add CSV export to dashboard")
 ```
+
+**PR Description** (use template):
+```markdown
+## What does this PR do?
+Brief description
+
+## Why are we doing this?
+Problem statement
+
+## How did you test this?
+- [ ] Unit tests pass
+- [ ] Integration tests pass
+- [ ] Manual testing steps:
+  1. Start MQTT broker
+  2. Run collector
+  3. Open dashboard
+  4. Verify [feature]
+
+## Checklist
+- [ ] Code follows style guide
+- [ ] New functions have docstrings
+- [ ] Tests added/updated
+- [ ] Documentation updated
+- [ ] No breaking changes
+```
+
+### 3. Code Review
+
+- Respond to reviewer comments professionally
+- Request review from experts in that area
+- Address all suggestions before merging
+
+### 4. Merge
+
+Once approved:
+```bash
+# Ensure latest
+git pull upstream main
+
+# Merge locally and push (maintainers only)
+git merge --squash origin/feature/your-feature-name
+git commit -m "Merge PR #XXX: Feature description"
+git push upstream main
+```
+
+## Adding a New Feature
+
+### Example: Add Support for External IMU
+
+**1. Plan** (design document):
+```markdown
+# Add External IMU Support
+
+## Motivation
+Some users want higher IMU sample rates
+
+## Design
+- Add ExtImuReader class in cpp_collector/
+- Subscribe to /external_imu topic
+- Merge with MAVSDK IMU data
+
+## Files Changed
+- telemetry_state.hpp (add external_imu field)
+- main.cpp (new subscriber)
+- main.py (dashboard handling)
+
+## Testing
+- Unit test for ExtImuReader
+- Integration test with mock IMU
+```
+
+**2. Implement**:
+```cpp
+// cpp_collector/external_imu.hpp
+class ExtImuReader {
+ public:
+  void on_imu_data(const sensor_msgs::Imu& msg);
+  
+ private:
+  std::queue<sensor_msgs::Imu> imu_queue_;
+};
+
+// Add to main.cpp
+ExtImuReader external_imu;
+subscriber = nh.subscribe("/external_imu", 10, 
+    &ExtImuReader::on_imu_data, &external_imu);
+```
+
+**3. Test**:
+```cpp
+// tests/unit/test_external_imu.cpp
+TEST(ExtImuReader, QueuesMessages) {
+    ExtImuReader reader;
+    sensor_msgs::Imu msg;
+    reader.on_imu_data(msg);
+    EXPECT_EQ(reader.queue_size(), 1);
+}
+```
+
+**4. Document**:
+```markdown
+# External IMU Support
+
+## Installation
+1. Install ROS2 package for IMU driver
+2. Configure rostopic in .env
+
+## Usage
+imu_reader = ExtImuReader()
+```
+
+**5. Update Roadmap**:
+- Add to Phase X
+- Update documentation
+
+## Testing Guidelines
+
+### Unit Tests (C++)
+
+```cpp
+#include <gtest/gtest.h>
+#include "telemetry_state.hpp"
+
+TEST(TelemetryState, InitializesWithNaN) {
+    TelemetryState state;
+    EXPECT_TRUE(std::isnan(state.lat));
+    EXPECT_TRUE(std::isnan(state.lon));
+    EXPECT_EQ(state.flight_id, "");
+}
+
+TEST(TelemetryState, ToJsonRoundTrip) {
+    TelemetryState state;
+    state.lat = 37.7749;
+    state.lon = -122.4194;
+    auto json = state.to_json();
+    EXPECT_EQ(json["lat"], 37.7749);
+}
+```
+
+### Integration Tests (Python)
+
+```python
+import pytest
+from unittest.mock import Mock
+from dashboard.telemetry_store import TelemetryStore
+
+@pytest.fixture
+def store():
+    return TelemetryStore()
+
+def test_add_sample(store):
+    sample = TelemetrySample(
+        ts_ms=1000,
+        lat=37.7749,
+        lon=-122.4194,
+        # ... other fields
+    )
+    store.add(sample)
+    assert len(store.samples) == 1
+    assert store.latest == sample
+
+def test_export_csv(store, tmp_path):
+    # Add samples
+    store.add(sample1)
+    store.add(sample2)
+    
+    # Export
+    csv_path = tmp_path / "export.csv"
+    store.to_csv(str(csv_path))
+    
+    # Verify
+    assert csv_path.exists()
+    lines = csv_path.read_text().split('\n')
+    assert len(lines) == 4  # Header + 2 samples + blank line
+```
