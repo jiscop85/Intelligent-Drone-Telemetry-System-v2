@@ -349,3 +349,187 @@ def test_export_csv(store, tmp_path):
     lines = csv_path.read_text().split('\n')
     assert len(lines) == 4  # Header + 2 samples + blank line
 ```
+
+### System Tests
+
+```bash
+#!/bin/bash
+# tests/system_test.sh
+
+# Start MQTT
+docker-compose up -d mosquitto
+
+# Start collector
+./build/telemetry_collector &
+COLLECTOR_PID=$!
+
+# Start dashboard in background
+python3 -u dashboard/app.py &
+DASHBOARD_PID=$!
+
+# Publish test message
+mosquitto_pub -h localhost -t drone/telemetry -m '{
+    "ts_ms": 1000,
+    "lat": 37.7749,
+    "lon": -122.4194
+}'
+
+# Check dashboard received it
+sleep 1
+ps -p $DASHBOARD_PID > /dev/null || echo "Dashboard crashed"
+
+# Cleanup
+kill $COLLECTOR_PID $DASHBOARD_PID
+docker-compose down
+```
+
+## Documentation
+
+### Python Docstrings
+
+Use Google style:
+```python
+def calculate_speed(v_north: float, v_east: float, v_down: float) -> float:
+    """Calculate total ground speed from NED velocity components.
+    
+    Args:
+        v_north: North velocity (m/s)
+        v_east: East velocity (m/s)
+        v_down: Down velocity (m/s)
+        
+    Returns:
+        Ground speed magnitude (m/s)
+        
+    Raises:
+        ValueError: If any input is NaN
+        
+    Examples:
+        >>> calculate_speed(10.0, 5.0, 0.0)
+        11.18
+    """
+    if math.isnan(v_north) or math.isnan(v_east) or math.isnan(v_down):
+        raise ValueError("Velocity components cannot be NaN")
+    return math.sqrt(v_north**2 + v_east**2 + v_down**2)
+```
+
+### C++ Comments
+
+```cpp
+// Brief description of what this function does
+// Explain the why, not the what (code shows the what)
+bool TelemetryCollector::publish_snapshot() {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    
+    // Atomically capture timestamp and state
+    auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()).count();
+    
+    state_.ts_ms = ms;
+    auto json = state_.to_json();
+    
+    // QoS 1 ensures at-least-once delivery
+    return mqtt_client_->publish(mqtt_topic_, json.dump());
+}
+```
+
+## Performance Considerations
+
+### Python
+
+```python
+# Good: Avoid repeated list appends
+samples = []
+for i in range(10000):
+    samples.append(process(i))  # O(n) worst case due to reallocation
+
+# Better: Use deque with maxlen
+from collections import deque
+samples = deque(maxlen=10000)
+for i in range(10000):
+    samples.append(process(i))  # Always O(1)
+```
+
+### C++
+
+```cpp
+// Good: Reserve space upfront
+std::vector<TelemetrySample> samples;
+samples.reserve(10000);  // Avoid reallocations
+for (int i = 0; i < 10000; i++) {
+    samples.push_back(process(i));
+}
+
+// Avoid: String concatenation in loop
+std::string result = "";
+for (int i = 0; i < 1000; i++) {
+    result += "data";  // Creates new string each iteration
+}
+```
+
+## Reporting Issues
+
+Use GitHub Issues with this template:
+
+```markdown
+## Bug Report
+
+### Description
+What's the problem?
+
+### Steps to Reproduce
+1. Start MQTT broker
+2. Launch collector with URL: ...
+3. Wait 10 seconds
+4. Observe: [issue]
+
+### Expected Behavior
+What should happen?
+
+### Actual Behavior
+What actually happened?
+
+### Environment
+- OS: Ubuntu 22.04
+- Python: 3.10
+- MAVSDK: Latest
+- Collector: v2.0.0
+
+### Logs
+[Paste relevant log output]
+
+### Additional Context
+[Screenshots, error traces, etc.]
+```
+
+## Release Process
+
+### Version Numbering: Semantic Versioning (MAJOR.MINOR.PATCH)
+
+```
+2.0.0  MVP v2 release
+2.0.1  Bug fix
+2.1.0  Phase 1 (SQLite storage)
+3.0.0  Major refactor or breaking changes
+```
+
+### Release Checklist
+
+- [ ] All tests passing
+- [ ] Update ROADMAP.md with completed items
+- [ ] Update CHANGELOG.md
+- [ ] Tag commit: `git tag -a v2.0.1 -m "Release v2.0.1"`
+- [ ] Push tags: `git push upstream --tags`
+- [ ] Create GitHub Release with notes
+
+## Need Help?
+
+- **General Questions**: Discussions tab
+- **Bug Reports**: Issues tab
+- **Design Discussion**: Use wiki or discussions
+- **Code Review**: Open a PR
+
+---
+
+**Last Updated**: 2026-05-29  
+**Maintained by**: Development Team
