@@ -314,3 +314,188 @@ log_dest stdout
 log_dest topic
 log_type all
 ```
+
+### C++ Collector Configuration
+
+Environment variables:
+
+```bash
+# MQTT Connection
+export MQTT_BROKER="tcp://localhost:1883"
+export MQTT_TOPIC="drone/telemetry"
+
+# MAVSDK Connection
+export MAVSDK_URL="udp://:14540"
+```
+
+### Dashboard Configuration
+
+In `dashboard/app.py`, modify constants:
+
+```python
+BROKER = "localhost"        # MQTT broker hostname
+MQTT_PORT = 1883           # MQTT port
+TOPIC = "drone/telemetry"  # Subscription topic
+```
+
+## Data Schema Reference
+
+All telemetry follows this JSON schema (published every 100ms at 10 Hz):
+
+```json
+{
+  "ts_ms": 1710000000000,
+  "flight_id": "flight_001",
+  
+  "gps": {
+    "lat": 52.5200,
+    "lon": 13.4050
+  },
+  
+  "altitude_m": {
+    "absolute": 112.4,
+    "relative": 48.2
+  },
+  
+  "battery": {
+    "voltage_v": 15.8,
+    "percent": 87.0
+  },
+  
+  "imu": {
+    "ax": 0.02, "ay": -0.01, "az": 9.81,
+    "gx": 0.001, "gy": 0.004, "gz": -0.002,
+    "temperature_c": 42.5
+  },
+  
+  "velocity_ned": {
+    "north_m_s": 3.2,
+    "east_m_s": 0.8,
+    "down_m_s": -0.4,
+    "ground_speed_mps": 3.3
+  },
+  
+  "wind": {
+    "north_m_s": 1.1,
+    "east_m_s": 0.3,
+    "down_m_s": 0.0,
+    "speed_mps": 1.14
+  },
+  
+  "state": {
+    "armed": true,
+    "in_air": true
+  },
+  
+  "quality": {
+    "gps_fix": 3,
+    "signal_ok": true
+  }
+}
+```
+
+## Module Documentation
+
+### C++ Collector (`cpp_collector/`)
+
+- **Language**: C++17
+- **Dependencies**: MAVSDK, MQTT (Paho), nlohmann/json
+- **Update Rate**: 10-20 Hz (configurable)
+- **Output**: JSON MQTT messages
+- **Thread Model**: Multi-threaded with mutex-protected state
+
+```
+TelemetryCollector (main thread)
+├─ MQTT Publisher Thread (100ms loop)
+└─ MAVSDK Callbacks (internal threads)
+   ├─ Position callback
+   ├─ Altitude callback
+   ├─ Battery callback
+   ├─ IMU callback
+   ├─ Velocity callback
+   ├─ Wind callback
+   ├─ Armed callback
+   └─ In-air callback
+```
+
+### Python Dashboard (`dashboard/`)
+
+- **Language**: Python 3.9+
+- **Framework**: PyQt6 + pyqtgraph
+- **Architecture**: Qt signals/slots + MQTT worker thread
+- **Features**:
+  - Live status cards (8 fields)
+  - Real-time line plots (altitude, battery, speed)
+  - Interactive Leaflet map with flight track
+  - CSV/GeoJSON export
+  - Anomaly detection integration
+  - 5000-sample ring buffer
+
+### Analytics Module (`analytics/`)
+
+- **ML Framework**: scikit-learn (IsolationForest)
+- **Features**: rel_alt_m, battery_pct, ground_speed_mps, temp_c, wind_speed_mps
+- **Training**: `python3 train_model.py flight_data.csv`
+- **Scoring**: Live sample scoring with fallback heuristics
+
+### ROS2 Bridge (`ros2_bridge/`)
+
+- **Topics Published**:
+  - `/drone/telemetry/raw` (String)
+  - `/drone/gps` (NavSatFix)
+  - `/drone/velocity` (TwistStamped)
+- **Frequency**: Same as MQTT input (10 Hz)
+- **Use**: Integrate with other ROS2 nodes
+
+### Vision Module (`vision/`)
+
+- **Framework**: OpenCV 4.5+
+- **Input**: Webcam (device 0)
+- **Overlay**: Live telemetry labels
+- **Fields**: GPS, altitude, battery, temperature, speed
+- **Resolution**: Camera native (typically 1080p)
+
+## Performance Metrics
+
+### Latency
+- MQTT publish: <10ms
+- Dashboard update: 4 FPS (250ms refresh)
+- Map refresh: <100ms JavaScript execution
+
+### Resource Usage (typical)
+- C++ Collector: ~50 MB RAM, <5% CPU
+- Python Dashboard: ~200 MB RAM, 10-20% CPU (rendering)
+- ROS2 Bridge: ~100 MB RAM, <5% CPU
+
+### Storage
+- CSV export: ~200 bytes/sample (5000 samples = 1 MB)
+- GeoJSON export: ~400 bytes/sample
+
+## Troubleshooting
+
+### "MQTT connection refused"
+```bash
+# Check MQTT is running
+mosquitto_pub -h localhost -t test -m hello
+# If fails, start MQTT:
+mosquitto -d
+```
+
+### "No drone found"
+```bash
+# Check MAVSDK UDP connection
+netstat -an | grep 14540
+# Start PX4 SITL or real autopilot on this port
+```
+
+### "Dashboard shows '--' for all values"
+```bash
+# Check MQTT is receiving data
+mosquitto_sub -h localhost -t "drone/telemetry"
+# Check Python subprocess in dashboard output
+```
+
+### "AttributeError: PyQt6 not installed"
+```bash
+pip install PyQt6 PyQt6-WebEngine pyqtgraph
+```
