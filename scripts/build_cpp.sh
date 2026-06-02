@@ -104,3 +104,56 @@ build_cmake() {
     if [ -f "./telemetry_collector" ]; then
         log_success "Build successful!"
         log_info "Binary: $BUILD_DIR/telemetry_collector"
+        
+        # Show size
+        SIZE=$(du -h ./telemetry_collector | cut -f1)
+        log_info "Binary size: $SIZE"
+        
+        return 0
+    else
+        log_error "Build failed - binary not found"
+        return 1
+    fi
+}
+
+# Quick build (no CMake, direct compilation)
+build_quick() {
+    log_info "Quick build (direct compilation)..."
+    
+    cd "$COLLECTOR_DIR"
+    
+    CFLAGS="-std=c++17 -O2 -Wall -Wextra"
+    LIBS="-lpaho-mqttpp3 -lpaho-mqtt3as"
+    PKG_LIBS=$(pkg-config --cflags --libs mavsdk 2>/dev/null || echo "-lmavsdk")
+    
+    g++ $CFLAGS main.cpp -o telemetry_collector $PKG_LIBS $LIBS
+    
+    if [ -f "./telemetry_collector" ]; then
+        log_success "Build successful!"
+        log_info "Binary: $COLLECTOR_DIR/telemetry_collector"
+        return 0
+    else
+        log_error "Build failed"
+        return 1
+    fi
+}
+
+# Run tests
+run_tests() {
+    log_info "Running basic tests..."
+    
+    # Check if binary exists
+    if [ ! -f "$BUILD_DIR/telemetry_collector" ]; then
+        log_error "Binary not found"
+        return 1
+    fi
+    
+    # Check dependencies at runtime
+    log_info "Checking library dependencies..."
+    ldd "$BUILD_DIR/telemetry_collector" 2>/dev/null | grep -E "mavsdk|mqtt|json" || {
+        log_error "Missing dependencies"
+        return 1
+    }
+    
+    log_success "All tests passed"
+}
