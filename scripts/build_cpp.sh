@@ -157,3 +157,82 @@ run_tests() {
     
     log_success "All tests passed"
 }
+
+# Main
+main() {
+    echo -e "${GREEN}"
+    echo "╔════════════════════════════════════════════╗"
+    echo "║   C++ Telemetry Collector - Build Script   ║"
+    echo "╚════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo ""
+    
+    detect_os
+    
+    # Ask for option
+    if [ -z "$1" ]; then
+        echo "Build options:"
+        echo "  1) Full CMake build (recommended)"
+        echo "  2) Quick direct compile"
+        echo "  3) Install dependencies only"
+        echo "  4) Exit"
+        echo ""
+        read -p "Select option (1-4): " OPTION
+    else
+        OPTION=$1
+    fi
+    
+    case $OPTION in
+        1)
+            install_deps
+            build_cmake
+            run_tests
+            ;;
+        2)
+            install_deps
+            build_quick
+            run_tests
+            ;;
+        3)
+            install_deps
+            ;;
+        4)
+            exit 0
+            ;;
+        *)
+            log_error "Invalid option"
+            exit 1
+            ;;
+    esac
+    
+    echo ""
+    log_success "Build complete!"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Start MQTT: mosquitto -d"
+    echo "  2. Run collector: $BUILD_DIR/telemetry_collector"
+    echo "  3. Run dashboard: python3 dashboard/app.py"
+}
+
+# Help
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    cat << EOF
+Usage: $0 [OPTION]
+
+Options:
+  1             CMake build (default, recommended)
+  2             Quick compile (direct g++)
+  3             Install dependencies only
+  4             Exit
+  --help        Show this help
+
+Examples:
+  $0            # Interactive menu
+  $0 1          # CMake build
+  $0 2          # Quick build
+
+EOF
+    exit 0
+fi
+
+main
