@@ -194,4 +194,94 @@ DASHBOARD_HOST=localhost
 # Database
 DATABASE_URL=sqlite:///data/db/flights.db
 
+# Logging
+LOG_LEVEL=INFO
+EOF
+        log_success "Created .env"
+    fi
+}
+
+# Create systemd service (optional)
+setup_systemd() {
+    log_info "Systemd service setup..."
+    
+    read -p "Create systemd service files? (y/N): " -n 1 -r
+    echo
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # Collector service
+        sudo tee /etc/systemd/system/drone-collector.service > /dev/null << EOF
+[Unit]
+Description=Drone Telemetry Collector
+After=mosquitto.service
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/drone_telemetry_system/cpp_collector/build/telemetry_collector
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        
+        # Dashboard service
+        sudo tee /etc/systemd/system/drone-dashboard.service > /dev/null << EOF
+[Unit]
+Description=Drone Telemetry Dashboard
+After=mosquitto.service
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+Environment="PATH=$PROJECT_DIR/venv/bin"
+ExecStart=$PROJECT_DIR/venv/bin/python3 drone_telemetry_system/dashboard/app.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        
+        sudo systemctl daemon-reload
+        log_success "Systemd services created"
+        log_info "Start with: sudo systemctl start drone-collector drone-dashboard"
+    fi
+}
+
+# Test installation
+test_installation() {
+    log_info "Testing installation..."
+    
+    # Test Python imports
+    python3 << 'EOF'
+try:
+    import PyQt6
+    import paho.mqtt.client
+    import pyqtgraph
+    import pandas
+    import sklearn
+    import numpy
+    print("✓ All Python dependencies available")
+except ImportError as e:
+    print(f"✗ Missing: {e}")
+    exit(1)
+EOF
+    
+    # Test MQTT
+    if command -v mosquitto_pub &> /dev/null; then
+        if mosquitto_pub -h localhost -t test -m hello 2>/dev/null; then
+            log_success "MQTT connection OK"
+        else
+            log_warn "MQTT not responding - start with 'mosquitto -d'"
+        fi
+    fi
+    
+    log_success "Installation test passed"
+}
+
+
 
