@@ -282,6 +282,95 @@ EOF
     
     log_success "Installation test passed"
 }
+# Summary
+print_summary() {
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║   Setup Complete!                                      ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${BLUE}Quick Start:${NC}"
+    echo "  1. Activate Python environment:"
+    echo "     source $PROJECT_DIR/venv/bin/activate"
+    echo ""
+    echo "  2. Build C++ collector:"
+    echo "     bash $PROJECT_DIR/scripts/build_cpp.sh"
+    echo ""
+    echo "  3. Start everything:"
+    echo "     bash $PROJECT_DIR/scripts/start_all.sh --docker"
+    echo ""
+    echo -e "${BLUE}Documentation:${NC}"
+    echo "  README:   $PROJECT_DIR/README.md"
+    echo "  Roadmap:  $PROJECT_DIR/ROADMAP.md"
+    echo ""
+    echo -e "${BLUE}Logs:${NC}"
+    echo "  $PROJECT_DIR/logs/"
+    echo ""
+}
 
+# Main
+main() {
+    print_header
+    
+    echo "This script will set up the Drone Telemetry System for development."
+    echo ""
+    read -p "Continue? (Y/n): " -n 1 -r
+    echo
+    
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        exit 0
+    fi
+    
+    check_python
+    setup_directories
+    setup_venv
+    setup_cpp
+    setup_mqtt
+    setup_config
+    test_installation
+    
+    read -p "Create systemd services? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        setup_systemd
+    fi
+    
+    print_summary
+}
+
+# Help
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Setup Intelligent Drone Telemetry System
+
+Options:
+  --help              Show this help message
+  --uninstall         Remove virtual environment and build artifacts
+  --check             Check installation only
+
+EOF
+    exit 0
+fi
+
+# Uninstall
+if [ "$1" == "--uninstall" ]; then
+    log_warn "Uninstalling..."
+    rm -rf "$PROJECT_DIR/venv"
+    rm -rf "$PROJECT_DIR/drone_telemetry_system/cpp_collector/build"
+    rm -rf "$PROJECT_DIR/logs/*"
+    log_success "Uninstalled"
+    exit 0
+fi
+
+# Check only
+if [ "$1" == "--check" ]; then
+    log_info "Checking installation..."
+    test_installation
+    exit 0
+fi
+
+main
 
 
