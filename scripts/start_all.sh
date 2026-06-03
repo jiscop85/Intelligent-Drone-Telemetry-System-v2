@@ -93,4 +93,75 @@ start_mqtt() {
             eclipse-mosquitto:latest)
         log_success "MQTT running in Docker (ID: ${MQTT_CONTAINER_ID:0:12})"
     else
- 
+        # Check if already running
+        if pgrep -x "mosquitto" > /dev/null; then
+            log_success "MQTT already running"
+        else
+            log_info "Starting Mosquitto..."
+            mosquitto -d -c /etc/mosquitto/mosquitto.conf 2>/dev/null || \
+                mosquitto -d 2>/dev/null || {
+                log_error "Failed to start Mosquitto"
+                exit 1
+            }
+            log_success "MQTT started (PID: $!)"
+        fi
+    fi
+    
+    # Wait for MQTT to be ready
+    sleep 2
+    if mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" -t "test" -m "hello" 2>/dev/null; then
+        log_success "MQTT is responsive"
+    else
+        log_error "MQTT not responding"
+        exit 1
+    fi
+}
+
+# Start C++ Collector
+start_collector() {
+    log_info "Starting C++ Telemetry Collector..."
+    
+    COLLECTOR_BIN="${PROJECT_DIR}/drone_telemetry_system/cpp_collector/build/telemetry_collector"
+    
+    if [ ! -f "$COLLECTOR_BIN" ]; then
+        log_error "Collector not built. Run: cd drone_telemetry_system/cpp_collector && mkdir build && cd build && cmake .. && make"
+        return 1
+    fi
+    
+    export MQTT_BROKER="tcp://${MQTT_HOST}:${MQTT_PORT}"
+    export MAVSDK_URL="$MAVSDK_URL"
+    
+    "$COLLECTOR_BIN" >> "$LOG_DIR/collector.log" 2>&1 &
+    COLLECTOR_PID=$!
+    
+    log_success "Collector started (PID: $COLLECTOR_PID)"
+    
+    # Check if collector is still running after 2 seconds
+    sleep 2
+    if ! kill -0 $COLLECTOR_PID 2>/dev/null; then
+        log_error "Collector crashed. Check logs:"
+        cat "$LOG_DIR/collector.log"
+        exit 1
+    fi
+}
+
+# Start Python Dashboard
+start_dashboard() {
+    log_info "Starting Python Dashboard..."
+    
+    cd "$PROJECT_DIR/drone_telemetry_system"
+    
+    # Check Python dependencies
+    if ! python3 -c "import PyQt6" 2>/dev/null; then
+        log_warn "PyQt6 not installed. Installing..."
+        pip install -r dashboard/requirements.txt
+    fi
+    
+    python3 dashboard/app.py >> "$LOG_DIR/dashboard.log" 2>&1 &
+    DASHBOARD_PID=$!
+    
+    log_success "Dashboard started (PID: $DASHBOARD_PID)"
+    log_info "Dashboard URL: http://localhost:$DASHBOARD_PORT"
+}
+
+
