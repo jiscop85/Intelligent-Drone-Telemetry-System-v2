@@ -96,4 +96,102 @@ setup_venv() {
     log_info "Installing Python dependencies..."
     cd "$PROJECT_DIR/drone_telemetry_system"
     pip install -r dashboard/requirements.txt
- 
+    
+    log_success "Python environment ready"
+    log_info "Activate with: source $VENV_DIR/bin/activate"
+}
+
+# C++ build setup
+setup_cpp() {
+    log_info "Setting up C++ build environment..."
+    
+    if ! command -v cmake &> /dev/null; then
+        log_warn "CMake not found"
+        read -p "Install build tools? (Y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            bash "$PROJECT_DIR/scripts/build_cpp.sh" 3
+        fi
+    else
+        log_success "CMake found"
+    fi
+    
+    log_info "To build collector: bash scripts/build_cpp.sh"
+}
+
+# MQTT setup
+setup_mqtt() {
+    log_info "Checking MQTT setup..."
+    
+    if command -v mosquitto &> /dev/null; then
+        log_success "Mosquitto found"
+    else
+        log_warn "Mosquitto not found"
+        read -p "Use Docker for MQTT? (Y/n): " -n 1 -r
+        echo
+        
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            if command -v docker &> /dev/null; then
+                log_info "Starting MQTT with Docker..."
+                docker run -d --name drone-mqtt -p 1883:1883 eclipse-mosquitto:latest
+                log_success "MQTT running in Docker"
+            else
+                log_error "Docker not found"
+                log_info "Install from: https://docs.docker.com/install"
+            fi
+        else
+            log_info "To install Mosquitto:"
+            if command -v apt-get &> /dev/null; then
+                echo "  sudo apt-get install mosquitto"
+            elif command -v brew &> /dev/null; then
+                echo "  brew install mosquitto"
+            fi
+        fi
+    fi
+}
+
+# Configuration files
+setup_config() {
+    log_info "Setting up configuration files..."
+    
+    # Copy example configs if they don't exist
+    if [ ! -f "$PROJECT_DIR/config/mosquitto.conf" ]; then
+        cat > "$PROJECT_DIR/config/mosquitto.conf" << 'EOF'
+# Mosquitto configuration for Drone Telemetry System
+listener 1883
+protocol mqtt
+
+listener 9001
+protocol websockets
+
+persistence true
+persistence_location /var/lib/mosquitto/
+
+log_dest stdout
+log_dest topic
+log_type all
+EOF
+        log_success "Created mosquitto.conf"
+    fi
+    
+    # Create .env file for configuration
+    if [ ! -f "$PROJECT_DIR/.env" ]; then
+        cat > "$PROJECT_DIR/.env" << 'EOF'
+# Drone Telemetry System Configuration
+
+# MQTT Configuration
+MQTT_HOST=localhost
+MQTT_PORT=1883
+MQTT_TOPIC=drone/telemetry
+
+# MAVSDK Connection
+MAVSDK_URL=udp://:14540
+
+# Dashboard
+DASHBOARD_PORT=5000
+DASHBOARD_HOST=localhost
+
+# Database
+DATABASE_URL=sqlite:///data/db/flights.db
+
+
