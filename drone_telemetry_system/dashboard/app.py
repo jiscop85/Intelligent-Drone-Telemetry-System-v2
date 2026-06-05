@@ -158,3 +158,98 @@ class MainWindow(QMainWindow):
         """
         self.map_view.setHtml(html)
 
+    def on_sample(self, raw: dict):
+        gps = raw.get("gps", {})
+        alt = raw.get("altitude_m", {})
+        bat = raw.get("battery", {})
+        imu = raw.get("imu", {})
+        vel = raw.get("velocity_ned", {})
+        wind = raw.get("wind", {})
+        state = raw.get("state", {})
+
+        sample = TelemetrySample(
+            ts_ms=raw.get("ts_ms", 0),
+            flight_id=raw.get("flight_id", "flight_001"),
+            lat=gps.get("lat"),
+            lon=gps.get("lon"),
+            abs_alt_m=alt.get("absolute"),
+            rel_alt_m=alt.get("relative"),
+            battery_v=bat.get("voltage_v"),
+            battery_pct=bat.get("percent"),
+            ax=imu.get("ax"),
+            ay=imu.get("ay"),
+            az=imu.get("az"),
+            gx=imu.get("gx"),
+            gy=imu.get("gy"),
+            gz=imu.get("gz"),
+            temp_c=imu.get("temperature_c"),
+            vn=vel.get("north_m_s"),
+            ve=vel.get("east_m_s"),
+            vd=vel.get("down_m_s"),
+            ground_speed_mps=vel.get("ground_speed_mps"),
+            wind_n=wind.get("north_m_s"),
+            wind_e=wind.get("east_m_s"),
+            wind_d=wind.get("down_m_s"),
+            wind_speed_mps=wind.get("speed_mps"),
+            armed=state.get("armed"),
+            in_air=state.get("in_air"),
+        )
+
+        sample.anomaly = self.detector.score(asdict(sample))
+        self.store.add(sample)
+
+        if sample.lat is not None and sample.lon is not None:
+            self.path_points.append([sample.lat, sample.lon])
+
+    def refresh_ui(self):
+        if not self.store.latest:
+            return
+
+        s = self.store.latest
+
+        self.cards["GPS"].setText(f"{s.lat:.6f}, {s.lon:.6f}" if s.lat is not None and s.lon is not None else "--")
+        self.cards["Altitude"].setText(f"abs {s.abs_alt_m:.1f} m / rel {s.rel_alt_m:.1f} m" if s.rel_alt_m is not None else "--")
+        self.cards["Battery"].setText(f"{s.battery_v:.2f} V / {s.battery_pct:.0f} %" if s.battery_pct is not None else "--")
+        self.cards["IMU Temp"].setText(f"{s.temp_c:.1f} °C" if s.temp_c is not None else "--")
+        self.cards["Velocity"].setText(
+            f"N {s.vn:.2f}  E {s.ve:.2f}  D {s.vd:.2f}  |  {s.ground_speed_mps:.2f} m/s"
+            if s.ground_speed_mps is not None else "--"
+        )
+        self.cards["Wind"].setText(
+            f"N {s.wind_n:.2f}  E {s.wind_e:.2f}  D {s.wind_d:.2f}  |  {s.wind_speed_mps:.2f} m/s"
+            if s.wind_speed_mps is not None else "--"
+        )
+        self.cards["State"].setText(f"armed={s.armed}  in_air={s.in_air}")
+        self.cards["Anomaly"].setText(s.anomaly)
+
+        self.alt_curve.setData(
+            [i for i, x in enumerate(self.store.samples) if x.rel_alt_m is not None],
+            [x.rel_alt_m for x in self.store.samples if x.rel_alt_m is not None]
+        )
+        self.batt_curve.setData(
+            [i for i, x in enumerate(self.store.samples) if x.battery_pct is not None],
+            [x.battery_pct for x in self.store.samples if x.battery_pct is not None]
+        )
+        self.spd_curve.setData(
+            [i for i, x in enumerate(self.store.samples) if x.ground_speed_mps is not None],
+            [x.ground_speed_mps for x in self.store.samples if x.ground_speed_mps is not None]
+        )
+
+        js = f"window.updateTrack({json.dumps(self.path_points)});"
+        self.map_view.page().runJavaScript(js)
+
+    def export_csv(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save CSV", "flight.csv", "CSV (*.csv)")
+        if path:
+            self.store.to_csv(path)
+
+    def export_geojson(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save GeoJSON", "track.geojson", "GeoJSON (*.geojson)")
+        if path:
+            self.store.to_geojson(path)
+
+if __name__ == "__main__":
+    app = QApplication([])
+    w = MainWindow()
+    w.show()
+    app.exec()
