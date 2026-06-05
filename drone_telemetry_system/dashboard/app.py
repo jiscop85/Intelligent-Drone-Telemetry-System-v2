@@ -125,4 +125,36 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.refresh_ui)
         self.timer.start(250)
 
-   
+    def _init_map(self):
+        html = """
+        <html>
+        <head>
+            <meta charset="utf-8" />
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                html, body, #map { height: 100%; margin: 0; }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                const map = L.map('map').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19
+                }).addTo(map);
+
+                let poly = L.polyline([], {weight: 4}).addTo(map);
+
+                window.updateTrack = function(points) {
+                    poly.setLatLngs(points);
+                    if (points.length > 0) {
+                        map.setView(points[points.length - 1], 17);
+                    }
+                };
+            </script>
+        </body>
+        </html>
+        """
+        self.map_view.setHtml(html)
+
